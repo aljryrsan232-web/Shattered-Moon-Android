@@ -1,0 +1,50 @@
+
+name: Build Shattered Moon APK
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+jobs:
+  android:
+    runs-on: ubuntu-24.04
+    container:
+      image: barichello/godot-ci:4.4.1
+
+    steps:
+      - name: Get repository files
+        uses: actions/checkout@v4
+
+      - name: Unpack the game project
+        shell: bash
+        run: |
+          set -euo pipefail
+          unzip -oq Shattered_Moon_Stage60_Direct_APK_Publish_Fix.zip
+          test -f project.godot
+          test -f export_presets.cfg
+          mkdir -p builds
+
+      - name: Check and import game resources
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/preflight.py
+          godot --headless --path . --editor --import --quit
+
+      - name: Build and check Android APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          sdkmanager 'platforms;android-34' 'build-tools;34.0.0'
+          godot --headless --path . --export-debug Android builds/Shattered_Moon.apk
+          python3 tools/verify_apk.py builds/Shattered_Moon.apk
+          "$ANDROID_HOME/build-tools/34.0.0/apksigner" verify builds/Shattered_Moon.apk
+
+      - name: Save downloadable APK
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ShatteredMoon-Android-APK
+          path: builds/Shattered_Moon.apk
+          if-no-files-found: error
